@@ -10,4 +10,4 @@ Based on Material name and Material _MainTex name to prevent conflict.
   - When merged, it disactive the original root GO and tags it with "EditorOnly" to avoid it to be in build.
   - Only supports 0-2 layers of LOD.
 
-Free to use. Please mention my name "Eugene Chu" twitter: @LenZ_Chu if you can ;3
+Free to use. Please mention my name "Eugene Chu" twitter: @LenZ_Chu if you can ;3 https://twitter.com/LenZ_Chu
