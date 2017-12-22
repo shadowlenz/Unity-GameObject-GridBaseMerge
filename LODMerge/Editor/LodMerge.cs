@@ -1,7 +1,6 @@
 ﻿//Written by: Eugene Chu
-//Free to use
-
-//Todo List: Support LOD group
+//Twitter @LenZ_Chu
+//Free to use. Please mention or credit my name in projects if possible!
 
 using System.Collections;
 using System.Collections.Generic;
@@ -16,6 +15,7 @@ public class LodMerge : EditorWindow
     public Transform _tr;
     public bool lockSelection;
 
+    public float lodDistance = 0.05f;
 
     //=========================bounds Preview======================//
     Vector3 minBound = Vector3.zero;
@@ -41,7 +41,9 @@ public class LodMerge : EditorWindow
     public class Mat
     {
         public Material mat;
+        public List<GameObject> meshGO = new List<GameObject>();
         public List<MeshFilter> meshR = new List<MeshFilter>();
+        public List<int> lodMesh = new List<int>();
     }
 
     [System.Serializable]
@@ -61,15 +63,17 @@ public class LodMerge : EditorWindow
 
     void OnGUI()
     {
+        EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'lod_0', 'lod_1', 'lod_2', respectfully.", MessageType.Info);
         sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
         GUILayout.Label( amountX + " x "+ amountY);
         if (_tr != null) lockSelection = EditorGUILayout.Toggle("lockSelection", lockSelection);
+        //lodDistance = EditorGUILayout.Slider("lodDistance", lodDistance, 0, 1);
 
         EditorGUILayout.Space();
 
         if (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2)
         {
-            EditorGUILayout.HelpBox("Select 'Root GO' in scene to merge meshes. Reccomend to have an empty root GO", MessageType.Info);
+            EditorGUILayout.HelpBox("Select 'Root GO' in scene to merge meshes. Requires an empty root GO container", MessageType.Info);
            // _tr = null;
         }
         else
@@ -78,8 +82,9 @@ public class LodMerge : EditorWindow
             {
               _tr = Selection.activeTransform.transform;
             }
-            if (_tr != null &&  GUILayout.Button("Merge within: " + _tr))
+            if (_tr != null &&  GUILayout.Button("Merge within: " + _tr.name))
             {
+                _tr.gameObject.SetActive(true);
                 DoesMerge(_tr);
             }
         }
@@ -250,20 +255,65 @@ public class LodMerge : EditorWindow
         Mat newMat = new Mat();
         newMat.mat = meshRenderer.sharedMaterial;
         newMat.meshR.Add (meshRenderer.GetComponent<MeshFilter>());
+        newMat.meshGO.Add(meshRenderer.gameObject);
+        //newMat.lodMesh.Add(-1); //defualt is -1. ignores making lod
 
         bool NotFound = false;
 
         //find a similar mat with main texture and create it's own node
         for (int i = 0; i < gridNodes[gridNode].mat.Count; i++)
         {
-            if (newMat.mat == gridNodes[gridNode].mat[i].mat &&  newMat.mat.mainTexture == gridNodes[gridNode].mat[i].mat.mainTexture)
+            if (newMat.mat == gridNodes[gridNode].mat[i].mat && newMat.mat.mainTexture == gridNodes[gridNode].mat[i].mat.mainTexture)
             {
+                //lod
+                if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
+                {
+                    Debug.Log("got 0");
+                    gridNodes[gridNode].mat[i].lodMesh.Add(0);
+                } else if (meshRenderer.gameObject.name.Contains("LOD1") || meshRenderer.gameObject.name.Contains("LOD_1") || meshRenderer.gameObject.name.Contains("Lod1") || meshRenderer.gameObject.name.Contains("Lod_1") || meshRenderer.gameObject.name.Contains("lod1") || meshRenderer.gameObject.name.Contains("lod_1"))
+                {
+                    Debug.Log("got 1");
+                    gridNodes[gridNode].mat[i].lodMesh.Add(1);
+                }
+                else if (meshRenderer.gameObject.name.Contains("LOD2") || meshRenderer.gameObject.name.Contains("LOD_2") || meshRenderer.gameObject.name.Contains("Lod2") || meshRenderer.gameObject.name.Contains("Lod_2") || meshRenderer.gameObject.name.Contains("lod2") || meshRenderer.gameObject.name.Contains("lod_2"))
+                {
+                    Debug.Log("got 2");
+                    gridNodes[gridNode].mat[i].lodMesh.Add(2);
+                }
+                else
+                {
+                    gridNodes[gridNode].mat[i].lodMesh.Add(-1);
+                }
+
                 gridNodes[gridNode].mat[i].meshR.Add(meshRenderer.GetComponent<MeshFilter>());
+                gridNodes[gridNode].mat[i].meshGO.Add(meshRenderer.gameObject);
                 NotFound = true;
             }
+        
         }
         if (!NotFound)
         {
+            //lod
+            if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
+            {
+                Debug.Log("got 0");
+                newMat.lodMesh.Add(0);
+            }
+            else if (meshRenderer.gameObject.name.Contains("LOD1") || meshRenderer.gameObject.name.Contains("LOD_1") || meshRenderer.gameObject.name.Contains("Lod1") || meshRenderer.gameObject.name.Contains("Lod_1") || meshRenderer.gameObject.name.Contains("lod1") || meshRenderer.gameObject.name.Contains("lod_1"))
+            {
+                Debug.Log("got 1");
+                newMat.lodMesh.Add(1);
+            }
+            else if (meshRenderer.gameObject.name.Contains("LOD2") || meshRenderer.gameObject.name.Contains("LOD_2") || meshRenderer.gameObject.name.Contains("Lod2") || meshRenderer.gameObject.name.Contains("Lod_2") || meshRenderer.gameObject.name.Contains("lod2") || meshRenderer.gameObject.name.Contains("lod_2"))
+            {
+                Debug.Log("got 2");
+                newMat.lodMesh.Add(2);
+            }
+            else
+            {
+                newMat.lodMesh.Add(-1);
+            }
+
             gridNodes[gridNode].mat.Add(newMat);
         }
      }
@@ -271,6 +321,13 @@ public class LodMerge : EditorWindow
     //phase B===========================================
     void CombineThruList()
     {
+        //find if exist and delete
+        if (GameObject.Find("Combine_" + _tr.name) != null)
+        {
+            DestroyImmediate(GameObject.Find("Combine_" + _tr.name));
+        }
+        //=====================
+
         GameObject newRootGO;
         newRootGO = new GameObject("Combine_"+_tr.name);
         newRootGO.transform.position = _tr.position;
@@ -282,27 +339,148 @@ public class LodMerge : EditorWindow
             {
 
 
-            CombineInstance[] combine = new CombineInstance[gridNodes[i].mat[ii].meshR.Count];
+                List<CombineInstance> combine = new List<CombineInstance>(); // = new CombineInstance[gridNodes[i].mat[ii].meshR.Count];
 
-            int f = 0;
-            while (f < combine.Length)
+                List<CombineInstance> combine0 = new List<CombineInstance>();
+                List<CombineInstance> combine1 = new List<CombineInstance>();
+                List<CombineInstance> combine2 = new List<CombineInstance>();
+
+                int f = 0;
+            while (f < gridNodes[i].mat[ii].meshR.Count)
             {
-                combine[f].mesh = gridNodes[i].mat[ii].meshR[f].sharedMesh;
-                combine[f].transform = gridNodes[i].mat[ii].meshR[f].transform.localToWorldMatrix;
+                    CombineInstance _combine =   new CombineInstance();
+                    _combine.mesh = gridNodes[i].mat[ii].meshR[f].sharedMesh;
+                     _combine.transform = gridNodes[i].mat[ii].meshR[f].transform.localToWorldMatrix;
+
+                    Debug.Log(gridNodes[i].mat[ii].lodMesh[f] + " |||" + gridNodes[i].mat[ii].meshGO[f].name );
+                    if (gridNodes[i].mat[ii].lodMesh[f] == 0)
+                    {
+                        combine0.Add(_combine);
+                    } else if (gridNodes[i].mat[ii].lodMesh[f] == 1)
+                    {
+                        combine1.Add(_combine);
+                    }
+                    else if (gridNodes[i].mat[ii].lodMesh[f] == 2)
+                    {
+                        combine2.Add(_combine);
+                    }
+                    else
+                    {
+                        combine.Add(_combine);
+                    }
+
+
                 f++;
             }
 
+
+            //create new gameobject
             GameObject newGO;
             newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name+"_"  +gridNodes[i].mat[ii].mat.name);
-            newGO.AddComponent<MeshFilter>().mesh.CombineMeshes(combine,true,true);
+            newGO.AddComponent<MeshFilter>().mesh.CombineMeshes(combine.ToArray(),true,true);
             newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
 
-                newGO.transform.SetParent(newRootGO.transform);
+            newGO.transform.SetParent(newRootGO.transform);
 
+            //lod component
+            Renderer[] render = new Renderer[1];
+            render[0] = newGO.GetComponent<Renderer>();
+
+            LOD[] lod = new LOD[1];
+            lod[0].fadeTransitionWidth = lodDistance;
+            lod[0].screenRelativeTransitionHeight = lodDistance;
+            lod[0].renderers = render;
+
+            newGO.AddComponent<LODGroup>().SetLODs(lod);
+
+
+
+                //lod 0-2========================================================================================
+                int _set = -1;
+                if (combine0.Count > 0) _set = 1;
+                if (combine1.Count > 0) _set = 2;
+                if (combine2.Count > 0) _set = 3;
+
+                Debug.Log("combine0.Count " + combine0.Count);
+                Debug.Log("combine1.Count " + combine1.Count);
+                Debug.Log("combine2.Count " + combine2.Count);
+               // Debug.Log("set amount LOD" + _set);
+
+                GameObject newGO_LOD0;
+                GameObject newGO_LOD1;
+                GameObject newGO_LOD2;
+                Renderer[] render0 = new Renderer[0];
+                Renderer[] render1 = new Renderer[0];
+                Renderer[] render2 = new Renderer[0];
+
+                if (_set > -1)
+                {
+                    //sub root for lod
+                    newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD");
+                    newGO.transform.SetParent(newRootGO.transform);
+                }
+
+                if (combine0.Count > 0)
+                {
+                    newGO_LOD0 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD0");
+
+                    newGO_LOD0.AddComponent<MeshFilter>().mesh.CombineMeshes(combine0.ToArray(), true, true);
+                    newGO_LOD0.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
+                    newGO_LOD0.transform.SetParent(newGO.transform);
+
+                    //lod component
+                    render0 = new Renderer[1];
+                    render0[0] = newGO_LOD0.GetComponent<Renderer>(); 
+                }
+                if (combine1.Count > 0)
+                {
+                    newGO_LOD1 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD1");
+
+                    newGO_LOD1.AddComponent<MeshFilter>().mesh.CombineMeshes(combine1.ToArray(), true, true);
+                    newGO_LOD1.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
+                    newGO_LOD1.transform.SetParent(newGO.transform);
+
+                    //lod component
+                    render1 = new Renderer[1];
+                    render1[0] = newGO_LOD1.GetComponent<Renderer>();
+                }
+                if (combine2.Count > 0)
+                {
+                    newGO_LOD2 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD2");
+
+                    newGO_LOD2.AddComponent<MeshFilter>().mesh.CombineMeshes(combine2.ToArray(), true, true);
+                    newGO_LOD2.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
+                    newGO_LOD2.transform.SetParent(newGO.transform);
+
+                    //lod component
+                    render2 = new Renderer[1];
+                    render2[0] = newGO_LOD2.GetComponent<Renderer>();
+                }
+
+                if (_set > -1)
+                {
+
+                    LOD[] lods = new LOD[_set];
+                    Renderer[] lod_renderers = new Renderer[_set];
+                    for (int c = 0; c < _set; c++)
+                    {
+                        if (c == 0) lods[c] = new LOD(1.0F / (c + 2), render0);
+                        else if (c == 1) lods[c] = new LOD(1.0F / (c + 2), render1);
+                        else if (c == 2) lods[c] = new LOD(1.0F / (c + 2), render2);
+                    }
+                    newGO.AddComponent<LODGroup>().SetLODs(lods);
+                    
+
+                }
+
+                //=============================================================================================
 
             }
 
  
         }
+
+        //end==================
+        _tr.gameObject.SetActive(false);
     }
 }
