@@ -383,30 +383,36 @@ public class LodMerge : EditorWindow
                 f++;
             }
 
-            //create new gameobject
-            GameObject newGO;
-            newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name+"_"  +gridNodes[i].mat[ii].mat.name);
+                //create new gameobject
 
-                Mesh s = new Mesh();
-                MeshFilter mf = newGO.AddComponent<MeshFilter>();
-                s.CombineMeshes(combine.ToArray(), true, true);
-                mf.sharedMesh = s;
+                    GameObject newGO;
+                    newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name);
+                if (combine.Count > 0)
+                {
+                    Mesh s = new Mesh();
+                    MeshFilter mf = newGO.AddComponent<MeshFilter>();
+                    s.CombineMeshes(combine.ToArray(), true, true);
+                    mf.sharedMesh = s;
 
-                newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
+                    newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
 
-            newGO.transform.SetParent(newRootGO.transform);
+                    newGO.transform.SetParent(newRootGO.transform);
 
-            //lod component
-            Renderer[] render = new Renderer[1];
-            render[0] = newGO.GetComponent<Renderer>();
+                    //lod component
+                    Renderer[] render = new Renderer[1];
+                    render[0] = newGO.GetComponent<Renderer>();
 
-            LOD[] lod = new LOD[1];
-            lod[0].fadeTransitionWidth = lodDistance;
-            lod[0].screenRelativeTransitionHeight = lodDistance;
-            lod[0].renderers = render;
+                    LOD[] lod = new LOD[1];
+                    lod[0].fadeTransitionWidth = lodDistance;
+                    lod[0].screenRelativeTransitionHeight = lodDistance;
+                    lod[0].renderers = render;
 
-            newGO.AddComponent<LODGroup>().SetLODs(lod);
-
+                    newGO.AddComponent<LODGroup>().SetLODs(lod);
+                }
+                else
+                {
+                    if (newGO != null) DestroyImmediate(newGO);
+                }
 
 
                 //lod 0-2========================================================================================
