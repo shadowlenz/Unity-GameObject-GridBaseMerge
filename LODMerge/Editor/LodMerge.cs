@@ -12,7 +12,7 @@ public class LodMerge : EditorWindow
 {
 
     public int sizeUnit = 30;
-    public Transform _tr;
+    public Transform _tr = null;
     public bool lockSelection;
 
     public float lodDistance = 0.05f;
@@ -61,8 +61,10 @@ public class LodMerge : EditorWindow
         window.Show();
     }
 
+
     void OnGUI()
     {
+
         EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'lod_0', 'lod_1', 'lod_2', respectfully.", MessageType.Info);
         sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
         GUILayout.Label( amountX + " x "+ amountY);
@@ -71,30 +73,40 @@ public class LodMerge : EditorWindow
 
         EditorGUILayout.Space();
 
-        if (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2)
+        if (_tr == null || (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2))
         {
             EditorGUILayout.HelpBox("Select 'Root GO' in scene to merge meshes. Requires an empty root GO container", MessageType.Info);
            // _tr = null;
         }
         else
         {
-            if (!lockSelection)
-            {
-              _tr = Selection.activeTransform.transform;
-            }
-            if (_tr != null &&  GUILayout.Button("Merge within: " + _tr.name))
+
+            if (GUILayout.Button("Merge within: " + _tr.name))
             {
                 _tr.gameObject.SetActive(true);
+                _tr.tag = "EditorOnly";
                 DoesMerge(_tr);
             }
         }
 
-        Repaint();
-    }
 
+     }
+    void OnSelectionChange()
+    {
+        if ( (Selection.activeTransform != null && Selection.activeTransform.transform.childCount > 1))
+        {
+            if (!lockSelection)
+            {
+                _tr = Selection.activeTransform.transform;
+            }
+        }
+        Repaint();
+        SceneView.RepaintAll();
+    }
     // Window has been selected======================================================================================================
     void OnFocus()
     {
+        OnSelectionChange();
         // Remove delegate listener if it has previously
         // been assigned.
         SceneView.onSceneGUIDelegate -= this.OnSceneGUI;
@@ -107,7 +119,6 @@ public class LodMerge : EditorWindow
         // When the window is destroyed, remove the delegate
         // so that it will no longer do any drawing.
         SceneView.onSceneGUIDelegate -= this.OnSceneGUI;
-        SceneView.RepaintAll();
     }
 
     void OnSceneGUI(SceneView sceneView)
@@ -115,7 +126,6 @@ public class LodMerge : EditorWindow
         if (_tr == null) return;
         // Do your drawing here using Handles.
         DrawBoundGizmos();
-        SceneView.RepaintAll();
     }
 
     void FindChildWithinChildMean(Transform t_tr)
@@ -373,12 +383,16 @@ public class LodMerge : EditorWindow
                 f++;
             }
 
-
             //create new gameobject
             GameObject newGO;
             newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name+"_"  +gridNodes[i].mat[ii].mat.name);
-            newGO.AddComponent<MeshFilter>().mesh.CombineMeshes(combine.ToArray(),true,true);
-            newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
+
+                Mesh s = new Mesh();
+                MeshFilter mf = newGO.AddComponent<MeshFilter>();
+                s.CombineMeshes(combine.ToArray(), true, true);
+                mf.sharedMesh = s;
+
+                newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
 
             newGO.transform.SetParent(newRootGO.transform);
 
@@ -424,7 +438,11 @@ public class LodMerge : EditorWindow
                 {
                     newGO_LOD0 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD0");
 
-                    newGO_LOD0.AddComponent<MeshFilter>().mesh.CombineMeshes(combine0.ToArray(), true, true);
+                    Mesh s0 = new Mesh();
+                    MeshFilter mf0 = newGO_LOD0.AddComponent<MeshFilter>();
+                    s0.CombineMeshes(combine0.ToArray(), true, true);
+                    mf0.sharedMesh = s0;
+
                     newGO_LOD0.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
                     newGO_LOD0.transform.SetParent(newGO.transform);
 
@@ -436,7 +454,11 @@ public class LodMerge : EditorWindow
                 {
                     newGO_LOD1 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD1");
 
-                    newGO_LOD1.AddComponent<MeshFilter>().mesh.CombineMeshes(combine1.ToArray(), true, true);
+                    Mesh s1 = new Mesh();
+                    MeshFilter mf1 = newGO_LOD1.AddComponent<MeshFilter>();
+                    s1.CombineMeshes(combine1.ToArray(), true, true);
+                    mf1.sharedMesh = s1;
+
                     newGO_LOD1.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
                     newGO_LOD1.transform.SetParent(newGO.transform);
 
@@ -448,7 +470,11 @@ public class LodMerge : EditorWindow
                 {
                     newGO_LOD2 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD2");
 
-                    newGO_LOD2.AddComponent<MeshFilter>().mesh.CombineMeshes(combine2.ToArray(), true, true);
+                    Mesh s2 = new Mesh();
+                    MeshFilter mf2 = newGO_LOD2.AddComponent<MeshFilter>();
+                    s2.CombineMeshes(combine2.ToArray(), true, true);
+                    mf2.sharedMesh = s2;
+
                     newGO_LOD2.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
                     newGO_LOD2.transform.SetParent(newGO.transform);
 
