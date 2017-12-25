@@ -85,12 +85,33 @@ public class LodMerge : EditorWindow
             {
                 _tr.gameObject.SetActive(true);
                 _tr.tag = "EditorOnly";
+              
                 DoesMerge(_tr);
+
             }
         }
 
+        if (Selection.activeTransform != null && Selection.activeTransform.GetComponent<RevertLodMerge>() != null)
+        {
+            RevertLodMerge _revert = Selection.activeTransform.GetComponent<RevertLodMerge>();
+            if (_revert.original != null)
+            {
+                GUI.color = new Color(1, 0.3f, 0.3f);
+                if (GUILayout.Button("Revert"))
+                {
+                    _revert.original.SetActive(true);
+                    _revert.original.tag = "Untagged";
+                    Selection.activeGameObject = _revert.original;
+                    DestroyImmediate(_revert.gameObject);
+                }
+            }
+            else
+            {
+                DestroyImmediate(_revert);
+            }
+        }
 
-     }
+    }
     void OnSelectionChange()
     {
         if ( (Selection.activeTransform != null && Selection.activeTransform.transform.childCount > 1))
@@ -342,6 +363,7 @@ public class LodMerge : EditorWindow
         newRootGO = new GameObject("Combine_"+_tr.name);
         newRootGO.transform.position = _tr.position;
 
+        newRootGO.gameObject.AddComponent<RevertLodMerge>().original = _tr.gameObject;
 
         for (int i = 0; i < gridNodes.Count; i++)
         {
@@ -514,5 +536,6 @@ public class LodMerge : EditorWindow
 
         //end==================
         _tr.gameObject.SetActive(false);
+        Selection.activeGameObject = newRootGO;
     }
 }
