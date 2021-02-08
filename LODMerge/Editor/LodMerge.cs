@@ -75,21 +75,24 @@ public class LodMerge : EditorWindow
     {
         state= (State)EditorGUILayout.EnumPopup(state);
 
-        EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'LOD0', 'LOD1', 'LOD2' respectfully.", MessageType.Info);
-        GUILayout.BeginHorizontal();
-        sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
-      
-        if (GUILayout.Button("10")) sizeUnit = 10;
-        if (GUILayout.Button("50")) sizeUnit = 50;
-        if (GUILayout.Button("100")) sizeUnit = 100;
-        if (GUILayout.Button("500")) sizeUnit = 500;
-        GUILayout.EndHorizontal();
-        if (sizeUnit < 5) sizeUnit = 5;
-        GUILayout.Label( amountX + " x "+ amountY);
+        if (state == State.Merge)
+        {
+            EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'LOD0', 'LOD1', 'LOD2' respectfully.", MessageType.Info);
+            GUILayout.BeginHorizontal();
+            sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
 
-        //spacer
-        EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-        //
+            if (GUILayout.Button("10")) sizeUnit = 10;
+            if (GUILayout.Button("50")) sizeUnit = 50;
+            if (GUILayout.Button("100")) sizeUnit = 100;
+            if (GUILayout.Button("500")) sizeUnit = 500;
+            GUILayout.EndHorizontal();
+            if (sizeUnit < 5) sizeUnit = 5;
+            GUILayout.Label(amountX + " x " + amountY);
+
+            //spacer
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            //
+        }
         if (_tr != null) lockSelection = EditorGUILayout.Toggle("lockSelection", lockSelection);
 
         if (_tr == null || (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2))
@@ -131,6 +134,7 @@ public class LodMerge : EditorWindow
         //atlas ui
         if (state == State.AtlasPack)
         {
+            sizeUnit = 9999;
             //spacer
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             EditorGUILayout.HelpBox("Name the GameObject unique names to prevent texture overwrites!", MessageType.Info);
@@ -157,10 +161,8 @@ public class LodMerge : EditorWindow
         Selection.activeGameObject = _revert.original;
         Undo.DestroyObjectImmediate(_revert.gameObject);
 
-        if (_revert.texutrePath != string.Empty)
-        {
-            AssetDatabase.DeleteAsset(_revert.texutrePath);
-        }
+        if (_revert.texutrePath != string.Empty)  AssetDatabase.DeleteAsset(_revert.texutrePath);
+        if (_revert.materialPath != string.Empty) AssetDatabase.DeleteAsset(_revert.materialPath);
 
     }
     void OnSelectionChange()
@@ -421,6 +423,7 @@ public class LodMerge : EditorWindow
 
                     atlasTextures.Add(_mainTex);
                 }
+
             }
         }
 
@@ -436,11 +439,17 @@ public class LodMerge : EditorWindow
         string SetFolderPath = Path.GetDirectoryName(EditorSceneManager.GetActiveScene().path) + "/AtlasCombine";
         var folder = Directory.CreateDirectory(SetFolderPath);
         string SetTexturePath = SetFolderPath +"/"+ SelectedName + ".tga";
-
+        string SetMathPath = SetFolderPath + "/" + SelectedName +"_AtlasMat"+ ".mat";
+        //texture
         File.WriteAllBytes(SetTexturePath, bytes);
         AssetDatabase.ImportAsset(SetTexturePath, ImportAssetOptions.ForceUpdate);
-
         atlas = (Texture2D)AssetDatabase.LoadAssetAtPath(SetTexturePath, typeof(Texture2D));
+        //mat
+        Material atlasMat = new Material(Shader.Find("Standard"));
+        atlasMat.mainTexture = atlas;
+        AssetDatabase.CreateAsset(atlasMat, SetMathPath);
+        AssetDatabase.ImportAsset(SetMathPath, ImportAssetOptions.ForceUpdate);
+
         //destroy prebake
         DestroyImmediate(preBakeAtlas);
 
@@ -470,15 +479,18 @@ public class LodMerge : EditorWindow
         RevertLodMerge _revertLODMerge = newRootGO.gameObject.AddComponent<RevertLodMerge>();
         _revertLODMerge.original = _tr.gameObject;
         _revertLODMerge.texutrePath = SetTexturePath;
+        _revertLODMerge.materialPath = SetMathPath;
         //organizing
         if (_tr.parent != null) newRootGO.transform.SetParent(_tr.parent);
         newRootGO.transform.SetSiblingIndex(_tr.GetSiblingIndex());
         //----------------------------
-        List<CombineInstance> combine = new List<CombineInstance>();
+ 
         for (int i = 0; i < gridNodes.Count; i++)
         {
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
+                List<CombineInstance> combine = new List<CombineInstance>();
+
                 int meshR_i = 0;
                 int TotalMeshR_Count = gridNodes[i].mat[ii].meshR.Count;
 
@@ -545,34 +557,39 @@ public class LodMerge : EditorWindow
 
                     meshR_i += 1;
                 }
+
+
+
+
+                GameObject newGO;
+                newGO = new GameObject("_Combine_Atlas_");
+                if (combine.Count > 0)
+                {
+                    Mesh s = new Mesh();
+                    s.name = "_Combine_Atlas_Mesh";
+                    MeshFilter mf = newGO.AddComponent<MeshFilter>();
+                    s.CombineMeshes(combine.ToArray(), true, true);
+                    mf.sharedMesh = s;
+
+                    MeshRenderer thisMr = newGO.AddComponent<MeshRenderer>();
+                    thisMr.sharedMaterial = atlasMat;
+                    newGO.transform.SetParent(newRootGO.transform);
+
+                }
+                else
+                {
+                    if (newGO != null)
+                    {
+                        Undo.DestroyObjectImmediate(newGO);
+                        //DestroyImmediate(newGO);
+                    }
+                }
+
+
             }
         }
 
-        GameObject newGO;
-        newGO = new GameObject("_Combine_Atlas_");
-        if (combine.Count > 0)
-        {
-            Mesh s = new Mesh();
-            s.name = "_Combine_Atlas_Mesh";
-            MeshFilter mf = newGO.AddComponent<MeshFilter>();
-            s.CombineMeshes(combine.ToArray(), true, true);
-            mf.sharedMesh = s;
-
-            MeshRenderer thisMr = newGO.AddComponent<MeshRenderer>();
-            thisMr.sharedMaterial = new Material(Shader.Find("Standard"));
-            thisMr.sharedMaterial.mainTexture = atlas;
-
-            newGO.transform.SetParent(newRootGO.transform);
-
-        }
-        else
-        {
-            if (newGO != null)
-            {
-                Undo.DestroyObjectImmediate(newGO);
-                //DestroyImmediate(newGO);
-            }
-        }
+ 
 
 
         //------------------------- end

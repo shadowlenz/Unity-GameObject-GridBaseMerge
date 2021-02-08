@@ -25,10 +25,12 @@ public class RevertLodMergeEditor : Editor {
         {
             SerializedProperty original_s = serializedObject.FindProperty("original");
             SerializedProperty texutrePath_s = serializedObject.FindProperty("texutrePath");
+            SerializedProperty materialPath_s = serializedObject.FindProperty("materialPath");
 
             GUI.enabled = false;
             EditorGUILayout.PropertyField(original_s, new GUIContent("Original Grp Reference"));
             EditorGUILayout.PropertyField(texutrePath_s, new GUIContent("texutrePath Reference"));
+            EditorGUILayout.PropertyField(materialPath_s, new GUIContent("materialPath Reference"));
             GUI.enabled = true;
 
             GUI.color = new Color(1, 0.3f, 0.3f);
