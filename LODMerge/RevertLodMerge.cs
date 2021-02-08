@@ -2,5 +2,6 @@
 
 public class RevertLodMerge : MonoBehaviour {
 
-public GameObject original;
+    public GameObject original;
+    public string texutrePath;
 }

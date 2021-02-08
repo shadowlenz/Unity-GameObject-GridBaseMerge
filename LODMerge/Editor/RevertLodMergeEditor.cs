@@ -13,7 +13,7 @@ public class RevertLodMergeEditor : Editor {
         {
             try
             {
-                DestroyImmediate(this);
+                  Undo.DestroyObjectImmediate(this);
             }
             catch
             {
@@ -23,13 +23,19 @@ public class RevertLodMergeEditor : Editor {
         }
         else
         {
+            SerializedProperty original_s = serializedObject.FindProperty("original");
+            SerializedProperty texutrePath_s = serializedObject.FindProperty("texutrePath");
+
+            GUI.enabled = false;
+            EditorGUILayout.PropertyField(original_s, new GUIContent("Original Grp Reference"));
+            EditorGUILayout.PropertyField(texutrePath_s, new GUIContent("texutrePath Reference"));
+            GUI.enabled = true;
+
             GUI.color = new Color(1, 0.3f, 0.3f);
             if (GUILayout.Button("Revert"))
             {
-                _target.original.SetActive(true);
-                _target.original.tag = "Untagged";
-                Selection.activeGameObject = _target.original;
-                DestroyImmediate(_target.gameObject);
+                LodMerge lodMerge = (LodMerge)EditorWindow.GetWindow(typeof(LodMerge), true);
+                lodMerge.Revert(_target);
             }
         }
 

@@ -7,15 +7,21 @@ using System.Collections.Generic;
 using System;
 using UnityEditor;
 using UnityEngine;
-
+using System.IO;
+using UnityEditor.SceneManagement;
 public class LodMerge : EditorWindow
 {
+    public enum State
+    {
+        Merge=0, AtlasPack =1
+    }
+    public State state;
 
     public int sizeUnit = 30;
     public Transform _tr = null;
     public bool lockSelection;
 
-    public float lodDistance = 0.05f;
+    public float lodDistance = 0.02f;
 
     //=========================bounds Preview======================//
     Vector3 minBound = Vector3.zero;
@@ -53,6 +59,9 @@ public class LodMerge : EditorWindow
     }
     public List<GridNodes> gridNodes = new List<GridNodes>();
 
+    //======atlas state ==//
+    public int atlasTextureSize = 1024;
+
     [MenuItem("Window/StoryBook/Tools/GOGridMerger")]
     static void Init()
     {
@@ -64,25 +73,35 @@ public class LodMerge : EditorWindow
 
     void OnGUI()
     {
+        state= (State)EditorGUILayout.EnumPopup(state);
 
-        EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'lod_0', 'lod_1', 'lod_2', respectfully.", MessageType.Info);
+        EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'LOD0', 'LOD1', 'LOD2' respectfully.", MessageType.Info);
+        GUILayout.BeginHorizontal();
         sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
+      
+        if (GUILayout.Button("10")) sizeUnit = 10;
+        if (GUILayout.Button("50")) sizeUnit = 50;
+        if (GUILayout.Button("100")) sizeUnit = 100;
+        if (GUILayout.Button("500")) sizeUnit = 500;
+        GUILayout.EndHorizontal();
+        if (sizeUnit < 5) sizeUnit = 5;
         GUILayout.Label( amountX + " x "+ amountY);
-        if (_tr != null) lockSelection = EditorGUILayout.Toggle("lockSelection", lockSelection);
-        //lodDistance = EditorGUILayout.Slider("lodDistance", lodDistance, 0, 1);
 
-        EditorGUILayout.Space();
+        //spacer
+        EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+        //
+        if (_tr != null) lockSelection = EditorGUILayout.Toggle("lockSelection", lockSelection);
 
         if (_tr == null || (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2))
         {
             EditorGUILayout.HelpBox("Select 'Root GO' in scene to merge meshes. Requires an empty root GO container", MessageType.Info);
-           // _tr = null;
         }
         else
         {
 
             if (GUILayout.Button("Merge within: " + _tr.name))
             {
+                Undo.RecordObject(_tr, "setActive");
                 _tr.gameObject.SetActive(true);
                 _tr.tag = "EditorOnly";
               
@@ -99,16 +118,48 @@ public class LodMerge : EditorWindow
                 GUI.color = new Color(1, 0.3f, 0.3f);
                 if (GUILayout.Button("Revert"))
                 {
-                    _revert.original.SetActive(true);
-                    _revert.original.tag = "Untagged";
-                    Selection.activeGameObject = _revert.original;
-                    DestroyImmediate(_revert.gameObject);
+                    Revert(_revert);
                 }
             }
             else
             {
-                DestroyImmediate(_revert);
+                Undo.DestroyObjectImmediate(_revert);
             }
+        }
+        GUI.color = Color.white;
+
+        //atlas ui
+        if (state == State.AtlasPack)
+        {
+            //spacer
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            EditorGUILayout.HelpBox("Name the GameObject unique names to prevent texture overwrites!", MessageType.Info);
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.BeginHorizontal();
+            atlasTextureSize = EditorGUILayout.IntField("atlasTextureSize", atlasTextureSize);
+
+            if (GUILayout.Button("128")) atlasTextureSize = 128;
+            if (GUILayout.Button("256")) atlasTextureSize = 256;
+            if (GUILayout.Button("512")) atlasTextureSize = 512;
+            if (GUILayout.Button("1024")) atlasTextureSize = 1024;
+            GUILayout.EndHorizontal();
+            GUILayout.Box(atlas, GUILayout.Width(Screen.width/2), GUILayout.Height(Screen.height/2), GUILayout.MaxWidth(atlasTextureSize), GUILayout.MaxHeight(atlasTextureSize));
+
+            GUILayout.EndVertical();
+        }
+
+    }
+
+    public void Revert(RevertLodMerge _revert)
+    {
+        Undo.RecordObject(_revert.original, "setActive");
+        _revert.original.SetActive(true);
+        Selection.activeGameObject = _revert.original;
+        Undo.DestroyObjectImmediate(_revert.gameObject);
+
+        if (_revert.texutrePath != string.Empty)
+        {
+            AssetDatabase.DeleteAsset(_revert.texutrePath);
         }
 
     }
@@ -130,16 +181,16 @@ public class LodMerge : EditorWindow
         OnSelectionChange();
         // Remove delegate listener if it has previously
         // been assigned.
-        SceneView.onSceneGUIDelegate -= this.OnSceneGUI;
+        SceneView.duringSceneGui -= this.OnSceneGUI;
         // Add (or re-add) the delegate.
-        SceneView.onSceneGUIDelegate += this.OnSceneGUI;
+        SceneView.duringSceneGui += this.OnSceneGUI;
     }
 
     void OnDestroy()
     {
         // When the window is destroyed, remove the delegate
         // so that it will no longer do any drawing.
-        SceneView.onSceneGUIDelegate -= this.OnSceneGUI;
+        SceneView.duringSceneGui -= this.OnSceneGUI;
     }
 
     void OnSceneGUI(SceneView sceneView)
@@ -151,20 +202,20 @@ public class LodMerge : EditorWindow
 
     void FindChildWithinChildMean(Transform t_tr)
     {
-        for (int i = 0; i < t_tr.childCount; i++)
+        Transform[] AllChild = t_tr.GetComponentsInChildren<Transform>();
+        for (int i = 0; i < AllChild.Length; i++)
         {
-            mean += t_tr.GetChild(i).position;
+            mean += AllChild[i].position;
             childCountMean += 1;
-            if (t_tr.GetChild(i).childCount > 0) FindChildWithinChildMean(t_tr.GetChild(i));
         }
     }
     void FindChildWithinChildBound(Transform t_tr)
     {
-        for (int i = 0; i < t_tr.childCount; i++)
+        Transform[] AllChild = t_tr.GetComponentsInChildren<Transform>();
+        for (int i = 0; i < AllChild.Length; i++)
         {
-            minBound = Vector3.Min(minBound, t_tr.GetChild(i).position);
-            maxBound = Vector3.Max(maxBound, t_tr.GetChild(i).position);
-            if (t_tr.GetChild(i).childCount > 0) FindChildWithinChildBound(t_tr.GetChild(i));
+            minBound = Vector3.Min(minBound, AllChild[i].position);
+            maxBound = Vector3.Max(maxBound, AllChild[i].position);
         }
         
     }
@@ -180,34 +231,35 @@ public class LodMerge : EditorWindow
 
         minBound = mean;
         maxBound = mean;
+        float minYPos = minBound.y;
         FindChildWithinChildBound(_tr);
         // draw =======================================
         Handles.color = new Color(1,0,0,0.5f);
         //four corners
 
         //top left
-        topLeft = new Vector3(minBound.x, 0, minBound.z);
+        topLeft = new Vector3(minBound.x, minYPos, minBound.z);
         Handles.DrawWireCube(topLeft, Vector3.one);
         Handles.Label(topLeft, "TL"+ topLeft.ToString());
         //top right
-        topRight = new Vector3(minBound.x, 0, maxBound.z);
+        topRight = new Vector3(minBound.x, minYPos, maxBound.z);
         Handles.DrawWireCube(topRight, Vector3.one);
         Handles.Label(topRight, "TR" + topRight.ToString());
 
         betweenX = (topRight - topLeft).z;
-        Handles.Label(new Vector3(topLeft.x - 20, 0, (topLeft.z + topRight.z) / 2), betweenX.ToString());
+        Handles.Label(new Vector3(topLeft.x - 20, minYPos, (topLeft.z + topRight.z) / 2), betweenX.ToString());
 
         //bottom left
-        bottomLeft = new Vector3(maxBound.x, 0, minBound.z);
+        bottomLeft = new Vector3(maxBound.x, minYPos, minBound.z);
         Handles.DrawWireCube(bottomLeft, Vector3.one);
         Handles.Label(bottomLeft, "BL" + bottomLeft.ToString());
         //bottom right
-        bottomRight = new Vector3(maxBound.x, 0, maxBound.z);
+        bottomRight = new Vector3(maxBound.x, minYPos, maxBound.z);
         Handles.DrawWireCube(bottomRight, Vector3.one);
         Handles.Label(bottomRight, "BR" + bottomRight.ToString());
 
         betweenY = (bottomLeft - topLeft).x;
-        Handles.Label(new Vector3((bottomLeft.x + topLeft.x) / 2, 0, bottomLeft.z - 20), betweenY.ToString());
+        Handles.Label(new Vector3((bottomLeft.x + topLeft.x) / 2, minYPos, bottomLeft.z - 20), betweenY.ToString());
 
         //amount setup =======================================
         amountX = Mathf.RoundToInt(betweenX/ sizeUnit)+1;
@@ -216,7 +268,7 @@ public class LodMerge : EditorWindow
         {
             for (int x = 0; x < amountX; x++)
             {
-                Handles.DrawWireCube(new Vector3(topLeft.x + (y * sizeUnit),  0, topLeft.z + (x*sizeUnit) ) , Vector3.one * sizeUnit);
+                Handles.DrawWireCube(new Vector3(topLeft.x + (y * sizeUnit), minYPos, topLeft.z + (x*sizeUnit) ) , Vector3.one * sizeUnit);
             }
         }
     }
@@ -250,32 +302,25 @@ public class LodMerge : EditorWindow
             FindChildWithinChild(_Tr, x);
         }
         //phase B======================================================
-        CombineThruList();
-
+        if (state == State.Merge) CombineThruList();
+        else if (state == State.AtlasPack) AtlasCombine();
 
     }
 
     void FindChildWithinChild(Transform _Tr, int x)
     {
+        MeshRenderer[] MRs = _Tr.GetComponentsInChildren<MeshRenderer>();
         //go thru all the child count 2nd
-        for (int i = 0; i < _Tr.childCount; i++)
+        for (int i = 0; i < MRs.Length; i++)
         {
-            if (_Tr.GetChild(i).GetComponent<MeshRenderer>() != null)
-            {
-                float distanceX = Mathf.Abs(_Tr.GetChild(i).position.x - locationBox[x].x);
-                float distanceZ = Mathf.Abs(_Tr.GetChild(i).position.z - locationBox[x].z);
-                if (distanceX <= sizeUnit / 2 && distanceZ <= sizeUnit / 2)
-                {
-                    //found obj within the grid
-                    Debug.Log( "#" +x+ " | "+_Tr.GetChild(i).name + " @: " + locationBox[x] + " Distance: " + distanceX + "x" + distanceZ);
-                    FilterOutMat(_Tr.GetChild(i).GetComponent<MeshRenderer>(), x   );
-                }
-            }
 
-            //find child within child some more
-            if (_Tr.GetChild(i).childCount > 0)
+            float distanceX = Mathf.Abs(MRs[i].transform.position.x - locationBox[x].x);
+            float distanceZ = Mathf.Abs(MRs[i].transform.position.z - locationBox[x].z);
+            if (distanceX <= sizeUnit / 2 && distanceZ <= sizeUnit / 2)
             {
-                FindChildWithinChild(_Tr.GetChild(i), x);
+                //found obj within the grid
+                Debug.Log( "#" +x+ " | "+ MRs[i].transform.name + " @: " + locationBox[x] + " Distance: " + distanceX + "x" + distanceZ);
+                FilterOutMat(MRs[i], x   );
             }
         }
     }
@@ -349,50 +394,272 @@ public class LodMerge : EditorWindow
         }
      }
 
-    //phase B===========================================
+    //atlas texture
+    List <Texture2D> atlasTextures = new List<Texture2D>();
+    Rect[] rects;
+    Texture2D atlas;
+
+    //phase B Merge===========================================
+    void AtlasCombine()
+    {
+        //atlas setup
+
+        atlasTextures.Clear();
+        //make all textures found readable
+        for (int i = 0; i < gridNodes.Count; i++)
+        {
+            for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
+            {
+                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture;
+                if (_mainTex != null)
+                {
+                    string path = AssetDatabase.GetAssetPath(_mainTex);
+
+                    TextureImporter importer = (TextureImporter)TextureImporter.GetAtPath(path);
+                    importer.isReadable = true;
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+
+                    atlasTextures.Add(_mainTex);
+                }
+            }
+        }
+
+        //make texture ------------------------------------------------------------------------------------------
+        Texture2D preBakeAtlas = new Texture2D(atlasTextureSize, atlasTextureSize);
+        rects = preBakeAtlas.PackTextures(atlasTextures.ToArray(), 0, atlasTextureSize, false);
+
+        //Encode the packed texture to PNG
+        byte[] bytes = preBakeAtlas.EncodeToTGA();
+        //Save the packed texture to the datapath of your choice
+        string SelectedName = _tr.name;
+
+        string SetFolderPath = Path.GetDirectoryName(EditorSceneManager.GetActiveScene().path) + "/AtlasCombine";
+        var folder = Directory.CreateDirectory(SetFolderPath);
+        string SetTexturePath = SetFolderPath +"/"+ SelectedName + ".tga";
+
+        File.WriteAllBytes(SetTexturePath, bytes);
+        AssetDatabase.ImportAsset(SetTexturePath, ImportAssetOptions.ForceUpdate);
+
+        atlas = (Texture2D)AssetDatabase.LoadAssetAtPath(SetTexturePath, typeof(Texture2D));
+        //destroy prebake
+        DestroyImmediate(preBakeAtlas);
+
+        //cleanup atlas. revert all textures found to unreadable
+        for (int i = 0; i < gridNodes.Count; i++)
+        {
+            for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
+            {
+                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture;
+                string path = AssetDatabase.GetAssetPath(_mainTex);
+
+                TextureImporter importer = (TextureImporter)TextureImporter.GetAtPath(path);
+                importer.isReadable = false;
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            }
+        }
+        
+
+
+        //setup
+        GameObject newRootGO;
+        newRootGO = new GameObject("Combine_" + _tr.name);
+        Undo.RegisterCreatedObjectUndo(newRootGO, "created GO");
+        Undo.RecordObject(newRootGO.transform, "Move GO");
+        newRootGO.transform.position = _tr.position;
+
+        RevertLodMerge _revertLODMerge = newRootGO.gameObject.AddComponent<RevertLodMerge>();
+        _revertLODMerge.original = _tr.gameObject;
+        _revertLODMerge.texutrePath = SetTexturePath;
+        //organizing
+        if (_tr.parent != null) newRootGO.transform.SetParent(_tr.parent);
+        newRootGO.transform.SetSiblingIndex(_tr.GetSiblingIndex());
+        //----------------------------
+        List<CombineInstance> combine = new List<CombineInstance>();
+        for (int i = 0; i < gridNodes.Count; i++)
+        {
+            for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
+            {
+                int meshR_i = 0;
+                int TotalMeshR_Count = gridNodes[i].mat[ii].meshR.Count;
+
+                int uv_x = 0;
+                int uv_y = 0;
+                int OptimizedRowColumn = (int)Math.Ceiling(Mathf.Sqrt(TotalMeshR_Count));
+                Debug.Log("OptimizedRowColumn" + OptimizedRowColumn);
+                float perPerc = ((float)1 / (float)OptimizedRowColumn);
+
+
+                while (meshR_i < TotalMeshR_Count)
+                {
+                    CombineInstance _combine = new CombineInstance();
+
+                    Mesh newMesh = Instantiate(gridNodes[i].mat[ii].meshR[meshR_i].sharedMesh);
+                    newMesh.name = "_processingMesh_";
+
+                    _combine.mesh = newMesh;
+                    _combine.transform = gridNodes[i].mat[ii].meshR[meshR_i].transform.localToWorldMatrix;
+
+                    ///uv0
+                    Vector2[] lightMapUV0 = newMesh.uv;
+                    int thisUV0_i = 0;
+                    while (thisUV0_i < lightMapUV0.Length)
+                    {
+                        Debug.Log("rect + " +ii+ "  "+rects[ii]);
+                        lightMapUV0[thisUV0_i] =(lightMapUV0[thisUV0_i] *new Vector2(rects[ii].width, rects[ii].height)) + (new Vector2( rects[ii].x , rects[ii].y)  );
+
+
+                        thisUV0_i += 1;
+                    }
+                    newMesh.SetUVs(0, lightMapUV0);
+
+
+                    //uv1 lightmap atlasing
+                    Vector2[] lightMapUV = newMesh.uv2;
+
+                    int thisUV_i = 0;
+                    while (thisUV_i < lightMapUV.Length)
+                    {
+                        float uv_x_currentPerc = (uv_x * perPerc);
+                        float uv_y_currentPerc = (uv_y * perPerc);
+
+                        lightMapUV[thisUV_i] = (lightMapUV[thisUV_i] * perPerc) +
+                           new Vector2(uv_x_currentPerc, uv_y_currentPerc);
+
+
+                        thisUV_i += 1;
+                    }
+                    uv_x += 1;
+                    if (uv_x >= OptimizedRowColumn)
+                    {
+                        uv_x = 0;
+                        uv_y += 1;
+                    }
+
+                    newMesh.SetUVs(1, lightMapUV);
+
+
+
+
+
+                    combine.Add(_combine);
+
+                    meshR_i += 1;
+                }
+            }
+        }
+
+        GameObject newGO;
+        newGO = new GameObject("_Combine_Atlas_");
+        if (combine.Count > 0)
+        {
+            Mesh s = new Mesh();
+            s.name = "_Combine_Atlas_Mesh";
+            MeshFilter mf = newGO.AddComponent<MeshFilter>();
+            s.CombineMeshes(combine.ToArray(), true, true);
+            mf.sharedMesh = s;
+
+            MeshRenderer thisMr = newGO.AddComponent<MeshRenderer>();
+            thisMr.sharedMaterial = new Material(Shader.Find("Standard"));
+            thisMr.sharedMaterial.mainTexture = atlas;
+
+            newGO.transform.SetParent(newRootGO.transform);
+
+        }
+        else
+        {
+            if (newGO != null)
+            {
+                Undo.DestroyObjectImmediate(newGO);
+                //DestroyImmediate(newGO);
+            }
+        }
+
+
+        //------------------------- end
+        Undo.RecordObject(_tr.gameObject, "setActive");
+        _tr.gameObject.SetActive(false);
+        Selection.activeGameObject = newRootGO;
+
+    }
     void CombineThruList()
     {
-        //find if exist and delete
-        if (GameObject.Find("Combine_" + _tr.name) != null)
-        {
-            DestroyImmediate(GameObject.Find("Combine_" + _tr.name));
-        }
-        //=====================
-
+        //setup
         GameObject newRootGO;
         newRootGO = new GameObject("Combine_"+_tr.name);
+        Undo.RegisterCreatedObjectUndo(newRootGO, "created GO");
+        Undo.RecordObject(newRootGO.transform, "Move GO");
         newRootGO.transform.position = _tr.position;
 
         newRootGO.gameObject.AddComponent<RevertLodMerge>().original = _tr.gameObject;
+        //organizing
+        if (_tr.parent != null) newRootGO.transform.SetParent(_tr.parent);
+         newRootGO.transform.SetSiblingIndex(_tr.GetSiblingIndex());
+
 
         for (int i = 0; i < gridNodes.Count; i++)
         {
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
-
-
                 List<CombineInstance> combine = new List<CombineInstance>(); // = new CombineInstance[gridNodes[i].mat[ii].meshR.Count];
 
                 List<CombineInstance> combine0 = new List<CombineInstance>();
                 List<CombineInstance> combine1 = new List<CombineInstance>();
                 List<CombineInstance> combine2 = new List<CombineInstance>();
 
-                int f = 0;
-            while (f < gridNodes[i].mat[ii].meshR.Count)
-            {
-                    CombineInstance _combine =   new CombineInstance();
-                    _combine.mesh = gridNodes[i].mat[ii].meshR[f].sharedMesh;
-                     _combine.transform = gridNodes[i].mat[ii].meshR[f].transform.localToWorldMatrix;
+                int meshR_i = 0;
+                int TotalMeshR_Count = gridNodes[i].mat[ii].meshR.Count;
 
-                    Debug.Log(gridNodes[i].mat[ii].lodMesh[f] + " |||" + gridNodes[i].mat[ii].meshGO[f].name );
-                    if (gridNodes[i].mat[ii].lodMesh[f] == 0)
+                int uv_x = 0;
+                int uv_y = 0;
+                int OptimizedRowColumn =(int) Math.Ceiling (Mathf.Sqrt(TotalMeshR_Count));
+                Debug.Log("OptimizedRowColumn" + OptimizedRowColumn);
+                float perPerc = ((float)1 / (float)OptimizedRowColumn);
+
+
+                while (meshR_i < TotalMeshR_Count)
+                {
+                    CombineInstance _combine =   new CombineInstance();
+                    Mesh newMesh = Instantiate(gridNodes[i].mat[ii].meshR[meshR_i].sharedMesh);
+                    newMesh.name = "_processingMesh_";
+
+                    _combine.mesh = newMesh;
+                    _combine.transform = gridNodes[i].mat[ii].meshR[meshR_i].transform.localToWorldMatrix;
+
+                    //uv1 lightmap atlasing
+                    Vector2[] lightMapUV = newMesh.uv2;
+
+                    int thisUV_i = 0;
+                    while (thisUV_i < lightMapUV.Length)
+                    {
+                        float uv_x_currentPerc = (uv_x * perPerc);
+                        float uv_y_currentPerc = (uv_y * perPerc);
+
+                         lightMapUV[thisUV_i] = (lightMapUV[thisUV_i] * perPerc) +
+                            new Vector2(uv_x_currentPerc, uv_y_currentPerc);
+
+
+                        thisUV_i+=1;
+                    }
+                    uv_x += 1;
+                    if (uv_x >= OptimizedRowColumn)
+                    {
+                        uv_x = 0;
+                        uv_y += 1;
+                    }
+
+                    newMesh.SetUVs(1, lightMapUV);
+
+                    //-------------------------
+
+                    Debug.Log(gridNodes[i].mat[ii].lodMesh[meshR_i] + " |||" + gridNodes[i].mat[ii].meshGO[meshR_i].name );
+                    if (gridNodes[i].mat[ii].lodMesh[meshR_i] == 0)
                     {
                         combine0.Add(_combine);
-                    } else if (gridNodes[i].mat[ii].lodMesh[f] == 1)
+                    } else if (gridNodes[i].mat[ii].lodMesh[meshR_i] == 1)
                     {
                         combine1.Add(_combine);
                     }
-                    else if (gridNodes[i].mat[ii].lodMesh[f] == 2)
+                    else if (gridNodes[i].mat[ii].lodMesh[meshR_i] == 2)
                     {
                         combine2.Add(_combine);
                     }
@@ -402,24 +669,26 @@ public class LodMerge : EditorWindow
                     }
 
 
-                f++;
-            }
+                    meshR_i+=1;
+                }
 
                 //create new gameobject
 
-                    GameObject newGO;
-                    newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name);
+                GameObject newGO;
+                newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name);
+                Undo.RegisterCreatedObjectUndo(newGO, "created GO");
                 if (combine.Count > 0)
                 {
                     Mesh s = new Mesh();
+                    s.name = "_gridCombineMesh_"+ newGO.name;
                     MeshFilter mf = newGO.AddComponent<MeshFilter>();
                     s.CombineMeshes(combine.ToArray(), true, true);
                     mf.sharedMesh = s;
 
+
                     newGO.AddComponent<MeshRenderer>().material = gridNodes[i].mat[ii].mat;
 
                     newGO.transform.SetParent(newRootGO.transform);
-
                     //lod component
                     Renderer[] render = new Renderer[1];
                     render[0] = newGO.GetComponent<Renderer>();
@@ -433,7 +702,11 @@ public class LodMerge : EditorWindow
                 }
                 else
                 {
-                    if (newGO != null) DestroyImmediate(newGO);
+                    if (newGO != null)
+                    {
+                        Undo.DestroyObjectImmediate(newGO);
+                        //DestroyImmediate(newGO);
+                    }
                 }
 
 
@@ -459,12 +732,14 @@ public class LodMerge : EditorWindow
                 {
                     //sub root for lod
                     newGO = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD");
+                    Undo.RegisterCreatedObjectUndo(newGO, "created GO");
                     newGO.transform.SetParent(newRootGO.transform);
                 }
 
                 if (combine0.Count > 0)
                 {
                     newGO_LOD0 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD0");
+                    Undo.RegisterCreatedObjectUndo(newGO_LOD0, "created GO");
 
                     Mesh s0 = new Mesh();
                     MeshFilter mf0 = newGO_LOD0.AddComponent<MeshFilter>();
@@ -481,6 +756,7 @@ public class LodMerge : EditorWindow
                 if (combine1.Count > 0)
                 {
                     newGO_LOD1 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD1");
+                    Undo.RegisterCreatedObjectUndo(newGO_LOD1, "created GO");
 
                     Mesh s1 = new Mesh();
                     MeshFilter mf1 = newGO_LOD1.AddComponent<MeshFilter>();
@@ -497,6 +773,7 @@ public class LodMerge : EditorWindow
                 if (combine2.Count > 0)
                 {
                     newGO_LOD2 = new GameObject(gridNodes[i].mat[ii].meshR[0].name + "_" + gridNodes[i].mat[ii].mat.name + "_LOD2");
+                    Undo.RegisterCreatedObjectUndo(newGO_LOD2, "created GO");
 
                     Mesh s2 = new Mesh();
                     MeshFilter mf2 = newGO_LOD2.AddComponent<MeshFilter>();
@@ -534,8 +811,14 @@ public class LodMerge : EditorWindow
  
         }
 
+
         //end==================
+        Undo.RecordObject(_tr.gameObject, "setActive");
         _tr.gameObject.SetActive(false);
         Selection.activeGameObject = newRootGO;
     }
+
+
+
+
 }
