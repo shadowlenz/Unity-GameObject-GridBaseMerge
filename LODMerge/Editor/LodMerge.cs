@@ -75,8 +75,8 @@ public class LodMerge : EditorWindow
     {
         state= (State)EditorGUILayout.EnumPopup(state);
 
-        if (state == State.Merge)
-        {
+        //if (state == State.Merge)
+        //{
             EditorGUILayout.HelpBox("If using LOD 0-3 setup, name your child with the suffix: 'LOD0', 'LOD1', 'LOD2' respectfully.", MessageType.Info);
             GUILayout.BeginHorizontal();
             sizeUnit = EditorGUILayout.IntField("sizeUnit", sizeUnit);
@@ -92,7 +92,7 @@ public class LodMerge : EditorWindow
             //spacer
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             //
-        }
+        //}
         if (_tr != null) lockSelection = EditorGUILayout.Toggle("lockSelection", lockSelection);
 
         if (_tr == null || (Selection.activeTransform == null || Selection.activeTransform.transform.childCount < 2))
@@ -134,7 +134,7 @@ public class LodMerge : EditorWindow
         //atlas ui
         if (state == State.AtlasPack)
         {
-            sizeUnit = 9999;
+            //sizeUnit = 9999;
             //spacer
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             EditorGUILayout.HelpBox("Name the GameObject unique names to prevent texture overwrites!", MessageType.Info);
@@ -412,7 +412,7 @@ public class LodMerge : EditorWindow
         {
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
-                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture;
+                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture; //get the main texture
                 if (_mainTex != null)
                 {
                     string path = AssetDatabase.GetAssetPath(_mainTex);
@@ -430,6 +430,8 @@ public class LodMerge : EditorWindow
         //make texture ------------------------------------------------------------------------------------------
         Texture2D preBakeAtlas = new Texture2D(atlasTextureSize, atlasTextureSize);
         rects = preBakeAtlas.PackTextures(atlasTextures.ToArray(), 0, atlasTextureSize, false);
+
+        //TO DO please make a list of texture name to reference back what each rect i are so I can reference to my grid support. Avoid unknow material uv set//////////////////////////////////////!!!
 
         //Encode the packed texture to PNG
         byte[] bytes = preBakeAtlas.EncodeToTGA();
@@ -511,19 +513,27 @@ public class LodMerge : EditorWindow
                     _combine.mesh = newMesh;
                     _combine.transform = gridNodes[i].mat[ii].meshR[meshR_i].transform.localToWorldMatrix;
 
-                    ///uv0
-                    Vector2[] lightMapUV0 = newMesh.uv;
-                    int thisUV0_i = 0;
-                    while (thisUV0_i < lightMapUV0.Length)
+                    int ThisRectID = -1;
+                    for (int x = 0; x < atlasTextures.Count; x++)
                     {
-                        Debug.Log("rect + " +ii+ "  "+rects[ii]);
-                        lightMapUV0[thisUV0_i] =(lightMapUV0[thisUV0_i] *new Vector2(rects[ii].width, rects[ii].height)) + (new Vector2( rects[ii].x , rects[ii].y)  );
-
-
-                        thisUV0_i += 1;
+                        if (atlasTextures[x] == gridNodes[i].mat[ii].mat.mainTexture) ThisRectID = x;
                     }
-                    newMesh.SetUVs(0, lightMapUV0);
 
+                    ///uv0
+                    if (ThisRectID > -1)
+                    {
+                        Vector2[] lightMapUV0 = newMesh.uv;
+                        int thisUV0_i = 0;
+                        while (thisUV0_i < lightMapUV0.Length)
+                        {
+                            Debug.Log("rect + " + ThisRectID + "  " + rects[ThisRectID]);
+                            lightMapUV0[thisUV0_i] = (lightMapUV0[thisUV0_i] * new Vector2(rects[ThisRectID].width, rects[ThisRectID].height)) + (new Vector2(rects[ThisRectID].x, rects[ThisRectID].y));
+
+
+                            thisUV0_i += 1;
+                        }
+                        newMesh.SetUVs(0, lightMapUV0);
+                    }
 
                     //uv1 lightmap atlasing
                     Vector2[] lightMapUV = newMesh.uv2;
