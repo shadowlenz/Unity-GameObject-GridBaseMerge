@@ -456,7 +456,7 @@ public class LodMerge : EditorWindow
         //Save the packed texture to the datapath of your choice
         string SelectedName = _tr.name;
 
-        string SetFolderPath = Path.GetDirectoryName(EditorSceneManager.GetActiveScene().path) + "/AtlasCombine";
+        string SetFolderPath = Path.GetDirectoryName(EditorSceneManager.GetActiveScene().path) + "/AtlasCombine/"+ EditorSceneManager.GetActiveScene().name;
         var folder = Directory.CreateDirectory(SetFolderPath);
         string SetTexturePath = SetFolderPath +"/"+ SelectedName + ".tga";
         string SetMathPath = SetFolderPath + "/" + SelectedName +"_AtlasMat"+ ".mat";
