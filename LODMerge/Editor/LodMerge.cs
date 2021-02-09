@@ -207,6 +207,8 @@ public class LodMerge : EditorWindow
         if (_tr == null) return;
         // Do your drawing here using Handles.
         DrawBoundGizmos();
+        SceneView.RepaintAll();
+
     }
 
     void FindChildWithinChildMean(Transform t_tr)
