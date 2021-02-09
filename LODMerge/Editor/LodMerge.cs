@@ -11,6 +11,7 @@ using System.IO;
 using UnityEditor.SceneManagement;
 public class LodMerge : EditorWindow
 {
+    public LodMergeSO lodMergeSO;
     public enum State
     {
         Merge=0, AtlasPack =1
@@ -137,6 +138,7 @@ public class LodMerge : EditorWindow
             //sizeUnit = 9999;
             //spacer
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            lodMergeSO = (LodMergeSO)EditorGUILayout.ObjectField(lodMergeSO, typeof(LodMergeSO),false);
             EditorGUILayout.HelpBox("Name the GameObject unique names to prevent texture overwrites!", MessageType.Info);
             GUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.BeginHorizontal();
@@ -163,6 +165,11 @@ public class LodMerge : EditorWindow
 
         if (_revert.texutrePath != string.Empty)  AssetDatabase.DeleteAsset(_revert.texutrePath);
         if (_revert.materialPath != string.Empty) AssetDatabase.DeleteAsset(_revert.materialPath);
+        for (int i = 0; i < _revert.meshPath.Count; i++)
+        {
+            if (_revert.meshPath[i] != string.Empty) AssetDatabase.DeleteAsset(_revert.meshPath[i]);
+        }
+
 
     }
     void OnSelectionChange()
@@ -341,7 +348,7 @@ public class LodMerge : EditorWindow
         //find a similar mat with main texture and create it's own node
         for (int i = 0; i < gridNodes[gridNode].mat.Count; i++)
         {
-            if (newMat.mat == gridNodes[gridNode].mat[i].mat && newMat.mat.mainTexture == gridNodes[gridNode].mat[i].mat.mainTexture)
+            if (newMat.mat == gridNodes[gridNode].mat[i].mat && GetMainTexture(newMat.mat) == GetMainTexture(gridNodes[gridNode].mat[i].mat))
             {
                 //lod
                 if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
@@ -412,7 +419,7 @@ public class LodMerge : EditorWindow
         {
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
-                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture; //get the main texture
+                Texture2D _mainTex = GetMainTexture(gridNodes[i].mat[ii].mat); //get the main texture
                 if (_mainTex != null)
                 {
                     string path = AssetDatabase.GetAssetPath(_mainTex);
@@ -442,12 +449,13 @@ public class LodMerge : EditorWindow
         var folder = Directory.CreateDirectory(SetFolderPath);
         string SetTexturePath = SetFolderPath +"/"+ SelectedName + ".tga";
         string SetMathPath = SetFolderPath + "/" + SelectedName +"_AtlasMat"+ ".mat";
+ 
         //texture
         File.WriteAllBytes(SetTexturePath, bytes);
         AssetDatabase.ImportAsset(SetTexturePath, ImportAssetOptions.ForceUpdate);
         atlas = (Texture2D)AssetDatabase.LoadAssetAtPath(SetTexturePath, typeof(Texture2D));
         //mat
-        Material atlasMat = new Material(Shader.Find("Standard"));
+        Material atlasMat = new Material(GetShader());
         atlasMat.mainTexture = atlas;
         AssetDatabase.CreateAsset(atlasMat, SetMathPath);
         AssetDatabase.ImportAsset(SetMathPath, ImportAssetOptions.ForceUpdate);
@@ -460,7 +468,7 @@ public class LodMerge : EditorWindow
         {
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
-                Texture2D _mainTex = (Texture2D)gridNodes[i].mat[ii].mat.mainTexture;
+                Texture2D _mainTex = GetMainTexture(gridNodes[i].mat[ii].mat);
                 string path = AssetDatabase.GetAssetPath(_mainTex);
 
                 TextureImporter importer = (TextureImporter)TextureImporter.GetAtPath(path);
@@ -486,12 +494,21 @@ public class LodMerge : EditorWindow
         if (_tr.parent != null) newRootGO.transform.SetParent(_tr.parent);
         newRootGO.transform.SetSiblingIndex(_tr.GetSiblingIndex());
         //----------------------------
- 
+
+        int ExistMatInGridCount = 0;
         for (int i = 0; i < gridNodes.Count; i++)
         {
+            if (gridNodes[i].mat != null && gridNodes[i].mat.Count > 0) ExistMatInGridCount += 1;
+        }
+
+        for (int i = 0; i < gridNodes.Count; i++)
+        {
+            List<CombineInstance> combine = new List<CombineInstance>();
+
+
             for (int ii = 0; ii < gridNodes[i].mat.Count; ii++)
             {
-                List<CombineInstance> combine = new List<CombineInstance>();
+                //List<CombineInstance> combine = new List<CombineInstance>();
 
                 int meshR_i = 0;
                 int TotalMeshR_Count = gridNodes[i].mat[ii].meshR.Count;
@@ -534,34 +551,7 @@ public class LodMerge : EditorWindow
                         }
                         newMesh.SetUVs(0, lightMapUV0);
                     }
-
-                    //uv1 lightmap atlasing
-                    Vector2[] lightMapUV = newMesh.uv2;
-
-                    int thisUV_i = 0;
-                    while (thisUV_i < lightMapUV.Length)
-                    {
-                        float uv_x_currentPerc = (uv_x * perPerc);
-                        float uv_y_currentPerc = (uv_y * perPerc);
-
-                        lightMapUV[thisUV_i] = (lightMapUV[thisUV_i] * perPerc) +
-                           new Vector2(uv_x_currentPerc, uv_y_currentPerc);
-
-
-                        thisUV_i += 1;
-                    }
-                    uv_x += 1;
-                    if (uv_x >= OptimizedRowColumn)
-                    {
-                        uv_x = 0;
-                        uv_y += 1;
-                    }
-
-                    newMesh.SetUVs(1, lightMapUV);
-
-
-
-
+                  
 
                     combine.Add(_combine);
 
@@ -571,31 +561,42 @@ public class LodMerge : EditorWindow
 
 
 
-                GameObject newGO;
-                newGO = new GameObject("_Combine_Atlas_");
-                if (combine.Count > 0)
+ 
+
+
+            }
+            GameObject newGO;
+            newGO = new GameObject("_Combine_Atlas_");
+            if (combine.Count > 0)
+            {
+                //Mesh
+                Mesh atlasMesh = new Mesh();
+
+                string SetMeshPath = SetFolderPath + "/" + SelectedName + "_AtlasMesh_"+i + ".asset";
+                AssetDatabase.CreateAsset(atlasMesh, SetMeshPath);
+                AssetDatabase.ImportAsset(SetMeshPath, ImportAssetOptions.ForceUpdate);
+                _revertLODMerge.meshPath.Add (SetMeshPath);
+
+                atlasMesh.name = "_Combine_Atlas_Mesh";
+                MeshFilter mf = newGO.AddComponent<MeshFilter>();
+                atlasMesh.CombineMeshes(combine.ToArray(), true, true);
+                atlasMesh.uv2 = new Vector2[0];
+                Unwrapping.GenerateSecondaryUVSet(atlasMesh);
+
+                mf.sharedMesh = atlasMesh;
+
+                MeshRenderer thisMr = newGO.AddComponent<MeshRenderer>();
+                thisMr.sharedMaterial = atlasMat;
+                newGO.transform.SetParent(newRootGO.transform);
+
+            }
+            else
+            {
+                if (newGO != null)
                 {
-                    Mesh s = new Mesh();
-                    s.name = "_Combine_Atlas_Mesh";
-                    MeshFilter mf = newGO.AddComponent<MeshFilter>();
-                    s.CombineMeshes(combine.ToArray(), true, true);
-                    mf.sharedMesh = s;
-
-                    MeshRenderer thisMr = newGO.AddComponent<MeshRenderer>();
-                    thisMr.sharedMaterial = atlasMat;
-                    newGO.transform.SetParent(newRootGO.transform);
-
+                    Undo.DestroyObjectImmediate(newGO);
+                    //DestroyImmediate(newGO);
                 }
-                else
-                {
-                    if (newGO != null)
-                    {
-                        Undo.DestroyObjectImmediate(newGO);
-                        //DestroyImmediate(newGO);
-                    }
-                }
-
-
             }
         }
 
@@ -848,4 +849,17 @@ public class LodMerge : EditorWindow
 
 
 
+    //-------------------------
+    Texture2D GetMainTexture(Material mat)
+    {
+        if (lodMergeSO != null && mat.HasProperty(lodMergeSO.mainTextureProperty) && mat.GetTexture(lodMergeSO.mainTextureProperty) != null) return (Texture2D)mat.GetTexture(lodMergeSO.mainTextureProperty);
+        else if (mat.mainTexture != null) return (Texture2D)mat.mainTexture;
+        else return null;
+
+    }
+    Shader GetShader()
+    {
+        if (lodMergeSO != null && lodMergeSO.mat != null) return lodMergeSO.mat.shader;
+        else return Shader.Find("Standard");
+    }
 }

@@ -1,11 +1,12 @@
 fileFormatVersion: 2
 guid: 34258a2afe1887c4abbddfcb64cd5113
-timeCreated: 1513529550
-licenseType: Free
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - m_ViewDataDictionary: {instanceID: 0}
+  - lodMergeSO: {fileID: 11400000, guid: ff871b3158a65d04391afd04c41f41e7, type: 2}
+  - _tr: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
