@@ -322,14 +322,22 @@ public class LodMerge : EditorWindow
         //go thru all the child count 2nd
         for (int i = 0; i < MRs.Length; i++)
         {
-
-            float distanceX = Mathf.Abs(MRs[i].transform.position.x - locationBox[x].x);
-            float distanceZ = Mathf.Abs(MRs[i].transform.position.z - locationBox[x].z);
-            if (distanceX <= sizeUnit / 2 && distanceZ <= sizeUnit / 2)
+            if (state== State.AtlasPack)
             {
-                //found obj within the grid
-                Debug.Log( "#" +x+ " | "+ MRs[i].transform.name + " @: " + locationBox[x] + " Distance: " + distanceX + "x" + distanceZ);
-                FilterOutMat(MRs[i], x   );
+                //ignore any lods but gets the last lod instead
+                if (IsLOD(MRs[i]) >= 0 && IsLOD(MRs[i]) < 2) MRs[i] = null;
+            }
+
+            if (MRs[i] != null)
+            {
+                float distanceX = Mathf.Abs(MRs[i].transform.position.x - locationBox[x].x);
+                float distanceZ = Mathf.Abs(MRs[i].transform.position.z - locationBox[x].z);
+                if (distanceX <= sizeUnit / 2 && distanceZ <= sizeUnit / 2)
+                {
+                    //found obj within the grid
+                    Debug.Log("#" + x + " | " + MRs[i].transform.name + " @: " + locationBox[x] + " Distance: " + distanceX + "x" + distanceZ);
+                    FilterOutMat(MRs[i], x);
+                }
             }
         }
     }
@@ -351,16 +359,16 @@ public class LodMerge : EditorWindow
             if (newMat.mat == gridNodes[gridNode].mat[i].mat && GetMainTexture(newMat.mat) == GetMainTexture(gridNodes[gridNode].mat[i].mat))
             {
                 //lod
-                if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
+                if (IsLOD(meshRenderer) ==0 )
                 {
                     Debug.Log("got 0");
                     gridNodes[gridNode].mat[i].lodMesh.Add(0);
-                } else if (meshRenderer.gameObject.name.Contains("LOD1") || meshRenderer.gameObject.name.Contains("LOD_1") || meshRenderer.gameObject.name.Contains("Lod1") || meshRenderer.gameObject.name.Contains("Lod_1") || meshRenderer.gameObject.name.Contains("lod1") || meshRenderer.gameObject.name.Contains("lod_1"))
+                } else if (IsLOD(meshRenderer) == 1)
                 {
                     Debug.Log("got 1");
                     gridNodes[gridNode].mat[i].lodMesh.Add(1);
                 }
-                else if (meshRenderer.gameObject.name.Contains("LOD2") || meshRenderer.gameObject.name.Contains("LOD_2") || meshRenderer.gameObject.name.Contains("Lod2") || meshRenderer.gameObject.name.Contains("Lod_2") || meshRenderer.gameObject.name.Contains("lod2") || meshRenderer.gameObject.name.Contains("lod_2"))
+                else if (IsLOD(meshRenderer) == 2)
                 {
                     Debug.Log("got 2");
                     gridNodes[gridNode].mat[i].lodMesh.Add(2);
@@ -379,17 +387,17 @@ public class LodMerge : EditorWindow
         if (!NotFound)
         {
             //lod
-            if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
+            if (IsLOD(meshRenderer) == 0)
             {
                 Debug.Log("got 0");
                 newMat.lodMesh.Add(0);
             }
-            else if (meshRenderer.gameObject.name.Contains("LOD1") || meshRenderer.gameObject.name.Contains("LOD_1") || meshRenderer.gameObject.name.Contains("Lod1") || meshRenderer.gameObject.name.Contains("Lod_1") || meshRenderer.gameObject.name.Contains("lod1") || meshRenderer.gameObject.name.Contains("lod_1"))
+            else if (IsLOD(meshRenderer) == 1)
             {
                 Debug.Log("got 1");
                 newMat.lodMesh.Add(1);
             }
-            else if (meshRenderer.gameObject.name.Contains("LOD2") || meshRenderer.gameObject.name.Contains("LOD_2") || meshRenderer.gameObject.name.Contains("Lod2") || meshRenderer.gameObject.name.Contains("Lod_2") || meshRenderer.gameObject.name.Contains("lod2") || meshRenderer.gameObject.name.Contains("lod_2"))
+            else if (IsLOD(meshRenderer) == 2)
             {
                 Debug.Log("got 2");
                 newMat.lodMesh.Add(2);
@@ -411,6 +419,7 @@ public class LodMerge : EditorWindow
     //phase B Merge===========================================
     void AtlasCombine()
     {
+
         //atlas setup
 
         atlasTextures.Clear();
@@ -861,5 +870,27 @@ public class LodMerge : EditorWindow
     {
         if (lodMergeSO != null && lodMergeSO.mat != null) return lodMergeSO.mat.shader;
         else return Shader.Find("Standard");
+    }
+
+    int IsLOD(MeshRenderer meshRenderer)
+    {
+        int _thisLOD = -1;
+        if (meshRenderer.gameObject.name.Contains("LOD0") || meshRenderer.gameObject.name.Contains("LOD_0") || meshRenderer.gameObject.name.Contains("Lod0") || meshRenderer.gameObject.name.Contains("Lod_0") || meshRenderer.gameObject.name.Contains("lod0") || meshRenderer.gameObject.name.Contains("lod_0"))
+        {
+            _thisLOD = 0;
+        }
+        else if (meshRenderer.gameObject.name.Contains("LOD1") || meshRenderer.gameObject.name.Contains("LOD_1") || meshRenderer.gameObject.name.Contains("Lod1") || meshRenderer.gameObject.name.Contains("Lod_1") || meshRenderer.gameObject.name.Contains("lod1") || meshRenderer.gameObject.name.Contains("lod_1"))
+        {
+            _thisLOD = 1;
+        }
+        else if (meshRenderer.gameObject.name.Contains("LOD2") || meshRenderer.gameObject.name.Contains("LOD_2") || meshRenderer.gameObject.name.Contains("Lod2") || meshRenderer.gameObject.name.Contains("Lod_2") || meshRenderer.gameObject.name.Contains("lod2") || meshRenderer.gameObject.name.Contains("lod_2"))
+        {
+            _thisLOD = 2;
+        }
+        else
+        {
+            _thisLOD = -1;
+        }
+        return _thisLOD;
     }
 }
